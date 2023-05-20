@@ -9,11 +9,21 @@
 #define SOCKET_NAME "/tmp/test.socket"
 #define START_FD_COUNT 20
 #define LISTEN_SOCKET_MAX 128
+#define MAX_BUFFER_LENGTH 24
 
-int SERVER_STATE = 0;
+long long SERVER_STATE = 0;
 
 
-int get_listener_socket(void)
+struct ConnectionPool {
+    struct pollfd * pollfd;
+    char ** buffers;
+
+    unsigned int count;
+    size_t size;
+};
+
+
+int getServerListenerSocket()
 {
     int listener;
     struct sockaddr_un address;
@@ -36,100 +46,111 @@ int get_listener_socket(void)
     return listener;
 }
 
-void add_to_pfds(struct pollfd *pfds[], int newfd, int *fd_count, int *fd_size)
+void addToPool(struct ConnectionPool * pool, int clientFd)
 {
-    if (*fd_count == *fd_size) {
-        *fd_size *= 2;
+    if (pool->count == pool->size) {
+        pool->size *= 2;
 
-        *pfds = realloc(*pfds, sizeof(**pfds) * (*fd_size));
+        pool->pollfd = realloc(pool->pollfd, sizeof(*pool->pollfd) * (pool->size));
+        pool->buffers = realloc(pool->buffers, sizeof(*pool->buffers) * (pool->size));
     }
 
-    (*pfds)[*fd_count].fd = newfd;
-    (*pfds)[*fd_count].events = POLLIN; // Check ready-to-read
+    pool->pollfd[pool->count].fd = clientFd;
+    pool->pollfd[pool->count].events = POLLIN;
+    pool->buffers[pool->count] = malloc(sizeof(char *) * MAX_BUFFER_LENGTH);
 
-    (*fd_count)++;
+    pool->count++;
 }
 
-void del_from_pfds(struct pollfd pfds[], int i, int *fd_count)
+void deleteFromPool(struct ConnectionPool * pool, int i)
 {
     // Copy the one from the end over this one
-    pfds[i] = pfds[*fd_count-1];
+    pool->pollfd[i] = pool->pollfd[pool->count-1];
 
-    (*fd_count)--;
+    free(pool->buffers[i]);
+    pool->buffers[i] = pool->buffers[pool->count-1];
+
+    pool->pollfd--;
 }
 
-void process_new_connection(int listener, struct pollfd *pfds[], int *fd_count, int *fd_size) {
-    struct sockaddr_un remoteaddr;
-    socklen_t addrlen = sizeof remoteaddr;
-    int newfd = accept(listener,
-                       (struct sockaddr *)&remoteaddr,
-                       &addrlen);
+void processNewConnection(int listener, struct ConnectionPool * pool) {
+    struct sockaddr_un clientAddress;
+    socklen_t addressLen = sizeof clientAddress;
 
-    if (newfd == -1) {
+    int clientFd = accept(listener, (struct sockaddr *)&clientAddress, &addressLen);
+    if (clientFd == -1) {
         perror("accept");
-    } else {
-        add_to_pfds(pfds, newfd, fd_count, fd_size);
-
-        printf("pollserver: new connection %s "
-               "socket %d\n", remoteaddr.sun_path, newfd);
+        return;
     }
+
+    addToPool(pool, clientFd);
+    printf("pollserver: new connection socket %d\n", clientFd);
 }
 
 
 int main(void)
 {
-    int listener = get_listener_socket();
-
-    int fd_count = 0;
-    int fd_size = START_FD_COUNT;
-    struct pollfd *pfds = malloc(sizeof *pfds * fd_size);
-
+    int listener = getServerListenerSocket();
     if (listener == -1) {
         fprintf(stderr, "error getting listening socket\n");
         exit(1);
     }
 
-    pfds[0].fd = listener;
-    pfds[0].events = POLLIN;
 
-    fd_count = 1;
+    struct ConnectionPool * pool = malloc(sizeof(struct ConnectionPool));
+    pool->count = 1;
+    pool->size = START_FD_COUNT;
+    pool->pollfd = malloc(sizeof(struct pollfd **) * pool->size);
+    pool->buffers = malloc(sizeof(char **) * pool->size);
+
+    pool->pollfd[0].fd = listener;
+    pool->pollfd[0].events = POLLIN;
 
     while (1) {
-        int poll_count = poll(pfds, fd_count, -1);
+        int poll_count = poll(pool->pollfd, pool->count, -1);
 
         if (poll_count == -1) {
             perror("poll");
             exit(1);
         }
 
-        for(int i = 0; i < fd_count; i++) {
-            if (pfds[i].revents & POLLIN) {
-                if (pfds[i].fd == listener) {
-                    process_new_connection(listener, &pfds, &fd_count, &fd_size);
-                } else {
-                    char buf[256];
-                    size_t readBytes = recv(pfds[i].fd, buf, sizeof buf, 0);
+        for (int i = 0; i < pool->count; i++) {
+            if ((pool->pollfd[i].revents & POLLIN) == 0) {
+                continue;
+            }
 
-                    int sender_fd = pfds[i].fd;
+            if (pool->pollfd[i].fd == listener) {
+                processNewConnection(listener, pool);
+            } else {
+                char buf[24];
+                int sender_fd = pool->pollfd[i].fd;
+                size_t readBytes = recv(sender_fd, buf, sizeof buf, 0);
+                strncat(pool->buffers[i], buf, readBytes);
 
-                    if (readBytes <= 0) {
-                        if (readBytes == 0) {
-                            printf("pollserver: socket %d hung up\n", sender_fd);
-                        } else {
-                            perror("recv");
-                        }
-
-                        close(pfds[i].fd);
-                        del_from_pfds(pfds, i, &fd_count);
+                if (readBytes <= 0) {
+                    if (readBytes == 0) {
+                        printf("pollserver: socket %d hung up\n", sender_fd);
                     } else {
-                        int res = atoi(buf);
-                        printf("%d", res);
-                        SERVER_STATE += res;
-                        printf("%d", SERVER_STATE);
+                        perror("recv");
                     }
 
-                    for (int j = 0; j < 256; ++j) {
-                        buf[j] = '\0';
+                    close(pool->pollfd[i].fd);
+                    deleteFromPool(pool, i);
+                } else {
+                    if (pool->buffers[i][strlen(pool->buffers[i]) - 1] == '\n') {
+                        long long res = strtoll(buf, NULL, 10);
+
+                        printf("%d\n", res);
+                        SERVER_STATE += res;
+                        printf("%lld\n", SERVER_STATE);
+
+                        char answer[128];
+                        sprintf(answer, "%lld", SERVER_STATE);
+
+                        send(pool->pollfd[i].fd, answer, strlen(answer), 0);
+
+                        free(pool->buffers[i]);
+                        pool->buffers[i] = malloc(sizeof(char *) * MAX_BUFFER_LENGTH);
                     }
                 }
             }
