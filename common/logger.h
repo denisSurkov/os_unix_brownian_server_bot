@@ -1,4 +1,3 @@
-
 #ifndef OS_UNIX_LOGGER
 #define OS_UNIX_LOGGER
 #include "stdio.h"

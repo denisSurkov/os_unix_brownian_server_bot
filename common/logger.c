@@ -1,25 +1,14 @@
 #include <stdio.h>
 #include <stdarg.h>
-#include <stdlib.h>
 #include <time.h>
 #include <string.h>
 #include "logger.h"
-
-#define LOG_PATH "/tmp/brownian-server.log"
 
 FILE * logfile = NULL;
 
 
 void initLog(FILE * stream) {
-    if (stream != NULL) {
-        logfile = stream;
-        return;
-    }
-
-    logfile = fopen(LOG_PATH, "a");
-    if (logfile == NULL) {
-        exit(-2);
-    }
+    logfile = stream;
 }
 
 

@@ -8,9 +8,9 @@
 #include <errno.h>
 #include <stdbool.h>
 
-#include "logger.h"
+#include "../common/logger.h"
+#include "../common/config_reading.h"
 
-#define SOCKET_NAME "/tmp/test.socket"
 #define START_FD_COUNT 20
 #define LISTEN_SOCKET_MAX 128
 #define MAX_BUFFER_LENGTH 24
@@ -29,15 +29,15 @@ struct ConnectionPool {
 };
 
 
-int getServerListenerSocket()
+int getServerListenerSocket(const char * socketName)
 {
     int listener;
     struct sockaddr_un address;
 
-    unlink(SOCKET_NAME);
+    unlink(socketName);
     memset(&address, 0, sizeof address);
     address.sun_family = AF_UNIX;
-    strcpy(address.sun_path, SOCKET_NAME);
+    strcpy(address.sun_path, socketName);
 
     listener = socket(AF_UNIX, SOCK_STREAM, 0);
     if (bind(listener, (struct sockaddr*) &address, sizeof(address)) < 0) {
@@ -163,16 +163,23 @@ void updateStateAndSendItToClient(struct ConnectionPool * pool, int i) {
 }
 
 
-int main()
-{
+void checkArguments(int argc, char * argv[]) {
+    if (argc < 2) {
+        printf("usage: %s /path/to/config/\n", argv[0]);
+        exit(-1);
+    }
+}
+
+
+int main(int argc, char * argv[]) {
+    checkArguments(argc, argv);
+
     initLog(stdout);
 
-    int listener = getServerListenerSocket();
-    if (listener == -1) {
-        fprintf(stderr, "error getting listening socket\n");
-        exit(1);
-    }
+    const char * config = argv[1];
+    const char * socketName = getSocketNameFromConfig(config);
 
+    int listener = getServerListenerSocket(socketName);
     struct ConnectionPool * pool = initConnectionPool(listener);
 
     writeLog("init pool, waiting for connections");
