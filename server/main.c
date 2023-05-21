@@ -77,7 +77,7 @@ void addToPool(struct ConnectionPool * pool, int clientFd)
         pool->pollfd = realloc(pool->pollfd, sizeof(*pool->pollfd) * (pool->size));
         pool->buffers = realloc(pool->buffers, sizeof(*pool->buffers) * (pool->size));
 
-        writeLog("increased connection pool size, now %d", pool->size);
+        writeLog("increased connection pool size, now %d, sbrk %d", pool->size, sbrk(0));
     }
 
     pool->pollfd[pool->count].fd = clientFd;
@@ -86,6 +86,7 @@ void addToPool(struct ConnectionPool * pool, int clientFd)
     memset(pool->buffers[pool->count], 0, MAX_BUFFER_LENGTH);
 
     pool->count++;
+    writeLog("new connection, sbrk 0x%x" , sbrk(0));
 }
 
 void deleteFromPool(struct ConnectionPool * pool, int i)
@@ -125,7 +126,7 @@ void processNewConnection(int listener, struct ConnectionPool * pool) {
 
 void processZeroBytesReadFromSocket(struct ConnectionPool * pool, int i, size_t readBytes) {
     if (readBytes == 0) {
-        writeLog("socket %d disconnected", pool->pollfd[i].fd);
+        writeLog("socket %d disconnected, sbrk 0x%x", pool->pollfd[i].fd, sbrk(0));
     } else {
         writeLog("recv error with socket %d, error %s", pool->pollfd[i].fd, strerror(errno));
     }

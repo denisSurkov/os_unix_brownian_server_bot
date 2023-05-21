@@ -72,7 +72,6 @@ int connectToServer(const char * serverName) {
         perror("connect");
         exit(-1);
     }
-
     return serverSocket;
 }
 
@@ -103,17 +102,24 @@ int main(int argc, char * argv[]) {
             writeLog("slept before sending");
         }
 
-        size_t bytesSend = send(serverSocket, (const char *) &stdinBuffer, 1, 0);
-        writeLog("send %d bytes", bytesSend);
+        send(serverSocket, (const char *) &stdinBuffer, 1, 0);
+        writeLog("sending %s", strerror(errno));
 
         if (stdinBuffer == '\n') {
             char recvBuffer[MAX_RECV_BUFFER_LENGTH];
             size_t bytesRecv = recv(serverSocket, recvBuffer, MAX_RECV_BUFFER_LENGTH, 0);
-            recvBuffer[bytesRecv] = '\0';
-            writeLog("recv %d bytes, %s", bytesRecv, recvBuffer);
+            if (bytesRecv <= 0) {
+                writeLog("smth went wrong, %s", strerror(errno));
+                exit(-222);
+                perror("recv");
+                break;
+            }
+//            recvBuffer[bytesRecv] = '\0';
+//            writeLog("recv %d bytes, %s", bytesRecv, recvBuffer);
         }
     }
 
     writeLog("client send all data");
+    closeLog();
     return 0;
 }
