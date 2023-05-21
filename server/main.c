@@ -11,8 +11,8 @@
 #include "../common/logger.h"
 #include "../common/config_reading.h"
 
-#define START_FD_COUNT 20
-#define LISTEN_SOCKET_MAX 128
+#define START_FD_COUNT 100
+#define LISTEN_SOCKET_MAX 100
 #define MAX_BUFFER_LENGTH 24
 #define MAX_RECV_BUFFER_SIZE 14
 #define MAX_ANSWER_BUFFER 124
@@ -95,7 +95,9 @@ void deleteFromPool(struct ConnectionPool * pool, int i)
     pool->pollfd[i] = pool->pollfd[pool->count-1];
 
     free(pool->buffers[i]);
+    pool->buffers[i] = NULL;
     pool->buffers[i] = pool->buffers[pool->count-1];
+    pool->buffers[pool->count-1] = NULL;
 
     pool->pollfd--;
 }

@@ -12,7 +12,7 @@
 
 #define MAX_RECV_BUFFER_LENGTH 24
 #define MAX_BYTE_INTERVAL 256
-#define DEFAULT_SLEEP_MSECS 300
+#define DEFAULT_SLEEP_MSECS 400
 
 void checkArguments(int argc, char * argv[]) {
     if (argc < 2) {
@@ -93,31 +93,26 @@ int main(int argc, char * argv[]) {
     writeLog("client start sending data");
     char stdinBuffer;
     while (fread(&stdinBuffer, 1, 1, stdin) > 0) {
-        if (byteRead < randomByteToSleep) {
-            byteRead++;
+        byteRead++;
 
-            if (byteRead == randomByteToSleep) {
-                msleep(timeToSleep);
-            }
-            writeLog("slept before sending");
+        if (byteRead == randomByteToSleep) {
+            msleep(timeToSleep);
         }
 
         send(serverSocket, (const char *) &stdinBuffer, 1, 0);
-        writeLog("sending %s", strerror(errno));
 
         if (stdinBuffer == '\n') {
             char recvBuffer[MAX_RECV_BUFFER_LENGTH];
             size_t bytesRecv = recv(serverSocket, recvBuffer, MAX_RECV_BUFFER_LENGTH, 0);
-            if (bytesRecv <= 0) {
-                writeLog("smth went wrong, %s", strerror(errno));
-                exit(-222);
-                perror("recv");
-                break;
-            }
-//            recvBuffer[bytesRecv] = '\0';
+            if (bytesRecv == -1) continue;
 //            writeLog("recv %d bytes, %s", bytesRecv, recvBuffer);
         }
     }
+
+    char recvBuffer[MAX_RECV_BUFFER_LENGTH];
+    send(serverSocket, "0\n", 2, 0);
+    size_t bytesRecv = recv(serverSocket, recvBuffer, MAX_RECV_BUFFER_LENGTH, 0);
+    writeLog("recv %d bytes, %s", bytesRecv, recvBuffer);
 
     writeLog("client send all data");
     closeLog();
