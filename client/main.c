@@ -105,7 +105,6 @@ int main(int argc, char * argv[]) {
             char recvBuffer[MAX_RECV_BUFFER_LENGTH];
             size_t bytesRecv = recv(serverSocket, recvBuffer, MAX_RECV_BUFFER_LENGTH, 0);
             if (bytesRecv == -1) continue;
-//            writeLog("recv %d bytes, %s", bytesRecv, recvBuffer);
         }
     }
 
@@ -114,6 +113,9 @@ int main(int argc, char * argv[]) {
     send(serverSocket, "0\n", 2, 0);
     size_t bytesRecv = recv(serverSocket, recvBuffer, MAX_RECV_BUFFER_LENGTH, 0);
     writeLog("recv %d bytes, %s", bytesRecv, recvBuffer);
+
+    shutdown(serverSocket, SHUT_RDWR);
+    close(serverSocket);
 
     writeLog("client send all data");
     closeLog();

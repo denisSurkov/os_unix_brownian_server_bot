@@ -194,6 +194,11 @@ int main(int argc, char * argv[]) {
         }
 
         for (int i = 0; i < pool->count && poll_count > 0; i++) {
+            if (pool->pollfd[i].revents == POLLHUP || pool->pollfd[i].revents == POLLNVAL || pool->pollfd[i].revents == POLLERR) {
+                poll_count--;
+                processZeroBytesReadFromSocket(pool, i, 0);
+            }
+
             if (pool->pollfd[i].revents != POLLIN) {
                 continue;
             }
