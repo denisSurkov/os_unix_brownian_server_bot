@@ -164,3 +164,4 @@ _deps
 
 os_unix_brownian_client
 os_unix_brownian_server_bot
+results.txt

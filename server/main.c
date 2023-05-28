@@ -83,14 +83,15 @@ void addToPool(struct ConnectionPool * pool, int clientFd)
     pool->pollfd[pool->count].fd = clientFd;
     pool->pollfd[pool->count].events = POLLIN;
     pool->buffers[pool->count] = malloc(sizeof(char) * MAX_BUFFER_LENGTH);
-    memset(pool->buffers[pool->count], 0, MAX_BUFFER_LENGTH);
+    bzero(pool->buffers[pool->count], MAX_BUFFER_LENGTH);
 
     pool->count++;
-    writeLog("new connection, sbrk 0x%x" , sbrk(0));
 }
 
 void deleteFromPool(struct ConnectionPool * pool, int i)
 {
+    close(pool->pollfd[i].fd);
+
     // Copy the one from the end over this one
     pool->pollfd[i] = pool->pollfd[pool->count-1];
 
@@ -122,7 +123,7 @@ void processNewConnection(int listener, struct ConnectionPool * pool) {
     }
 
     addToPool(pool, clientFd);
-    writeLog("new connection socket %d", clientFd);
+    writeLog("new connection socket %d, sbrk %p", clientFd, sbrk(0));
 }
 
 
@@ -133,14 +134,13 @@ void processZeroBytesReadFromSocket(struct ConnectionPool * pool, int i, size_t 
         writeLog("recv error with socket %d, error %s", pool->pollfd[i].fd, strerror(errno));
     }
 
-    close(pool->pollfd[i].fd);
     deleteFromPool(pool, i);
 }
 
 
 bool checkIsReadyToUpdateState(const char * buffer) {
     // Делаю предположение, что все клиенты отправляют в конце \n, а после этого ждут ответ.
-    // То есть ситуация send("\n213456") невозможна.
+    // То есть ситуация send("22\n213456") невозможна.
     return buffer[strlen(buffer) - 1] == '\n';
 }
 
@@ -162,7 +162,7 @@ void updateStateAndSendItToClient(struct ConnectionPool * pool, int i) {
 
     free(pool->buffers[i]);
     pool->buffers[i] = malloc(sizeof(char) * MAX_BUFFER_LENGTH);
-    memset(pool->buffers[i], 0, MAX_BUFFER_LENGTH);
+    bzero(pool->buffers[i], MAX_BUFFER_LENGTH);
 }
 
 
@@ -193,10 +193,12 @@ int main(int argc, char * argv[]) {
             exit(1);
         }
 
-        for (int i = 0; i < pool->count; i++) {
-            if ((pool->pollfd[i].revents & POLLIN) == 0) {
+        for (int i = 0; i < pool->count && poll_count > 0; i++) {
+            if (pool->pollfd[i].revents != POLLIN) {
                 continue;
             }
+
+            poll_count--;
 
             if (pool->pollfd[i].fd == listener) {
                 processNewConnection(listener, pool);

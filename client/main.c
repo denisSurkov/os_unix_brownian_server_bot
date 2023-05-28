@@ -110,6 +110,7 @@ int main(int argc, char * argv[]) {
     }
 
     char recvBuffer[MAX_RECV_BUFFER_LENGTH];
+    bzero(recvBuffer, MAX_RECV_BUFFER_LENGTH);
     send(serverSocket, "0\n", 2, 0);
     size_t bytesRecv = recv(serverSocket, recvBuffer, MAX_RECV_BUFFER_LENGTH, 0);
     writeLog("recv %d bytes, %s", bytesRecv, recvBuffer);
